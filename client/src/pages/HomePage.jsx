@@ -6,6 +6,8 @@ import bg1 from "../assets/bg1.jpg";
 import  bg21 from "../assets/bg21.jpeg"
 import { VelocityScroll } from "../components/magicui/scroll-based-velocity";
 import CategoryCardsOverlay from "../components/cardCom.jsx";
+import { InteractiveHoverButton } from "../components/magicui/interactive-hover-button";
+
 
 
 
@@ -28,14 +30,29 @@ const HomePage = () => {
       <div className="absolute inset-0 bg-black/40 z-0"></div>
 
       {/* 🔝 Header (on top of overlay) */}
-      <header className="absolute top-0 left-0 w-full bg-black/30 px-8 py-4 flex justify-between items-center z-10">
-        <h1 className="text-2xl font-bold">FreelancePro</h1>
-        <nav className="space-x-6 text-lg">
-          <a href="#services" className="hover:text-gray-300">Services</a>
-          <a href="#portfolio" className="hover:text-gray-300">Portfolio</a>
-          <a href="#contact" className="hover:text-gray-300">Contact</a>
-        </nav>
-      </header>
+      <header className="absolute top-0 left-0 w-full bg-gradient-to-r from-black/50 via-black/30 to-black/50 px-8 py-4 flex justify-between items-center z-10 shadow-lg">
+  <h1 className="text-3xl font-extrabold text-white tracking-wide">
+    Freelance<span className="text-blue-400">Pro</span>
+  </h1>
+  <nav className="space-x-8 text-lg flex items-center">
+    <a href="#services" className="text-white hover:text-blue-400 transition duration-300">
+      Services
+    </a>
+    <a href="#portfolio" className="text-white hover:text-blue-400 transition duration-300">
+      Portfolio
+    </a>
+    <a href="#contact" className="text-white hover:text-blue-400 transition duration-300">
+      Contact
+    </a>
+    <InteractiveHoverButton className="bg-gradient-to-r from-blue-500 to-blue-400 text-white px-4 py-2 text-base rounded-md shadow-md hover:from-blue-600 hover:to-blue-500 transition duration-300">
+  Sign Up
+</InteractiveHoverButton>
+<InteractiveHoverButton className="bg-gradient-to-r from-gray-700 to-gray-600 text-white px-4 py-2 text-base rounded-md shadow-md hover:from-gray-800 hover:to-gray-700 transition duration-300">
+  Log In
+</InteractiveHoverButton>
+  </nav>
+</header>
+
 
       {/* 🧾 Intro Content */}
       <main className="relative z-10 flex flex-col items-center justify-center h-screen text-center px-4">

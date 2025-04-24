@@ -63,14 +63,15 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   otp: {
-    code: {
-      type: String,
-      default: ''
+    code: String,
+    expiresAt: Date,
+    lastSentAt: Date,
+    attempts: {
+      type: Number,
+      default: 0,
     },
-    expiresAt: {
-      type: Date
-    }
   },
+  
   resetToken: {
     type: String,
     default: ''
@@ -104,7 +105,12 @@ const userSchema = new mongoose.Schema({
         default: Date.now
       }
     }
-  ]
+  ],
+  resume: {
+    public_id: { type: String },
+    url: { type: String }
+  }
+  
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);

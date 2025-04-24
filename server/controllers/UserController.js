@@ -1,15 +1,15 @@
 import User from '../model/User.js';
 import bcrypt from 'bcryptjs';
 import generateToken from '../utils/generateToken.js';
-import nodemailer from 'nodemailer';
 import transporter from '../config/emailConfig.js';
 import crypto from 'crypto';
+import cloudinary from '../config/cloudinary.js'
+import streamifier from 'streamifier';
+import asyncHandler from "express-async-handler";
+
 
 // Generate a 6-digit numeric OTP
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
-
-// Configure nodemailer transporter
-
 
 // Send verification email
 const sendVerificationEmail = async (email, otp) => {
@@ -46,13 +46,12 @@ export const signup = async (req, res) => {
       otp: {
         code: otpCode,
         expiresAt: otpExpires,
+        lastSentAt: new Date(),
+        attempts: 0,
       },
     });
 
-    // Send OTP via email
     await sendVerificationEmail(email, otpCode);
-
-    // Also log OTP for Postman testing
     console.log(`OTP for ${email}: ${otpCode}`);
 
     res.status(201).json({
@@ -71,16 +70,31 @@ export const verifyEmail = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!user.otp || user.otp.code !== otp) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+    if (!user.otp || !user.otp.code) {
+      return res.status(400).json({ message: 'No OTP found. Please request a new one.' });
     }
 
     if (new Date() > new Date(user.otp.expiresAt)) {
       return res.status(400).json({ message: 'OTP has expired' });
     }
 
+    if (user.otp.attempts >= 5) {
+      return res.status(429).json({ message: 'Too many failed attempts. Please request a new OTP.' });
+    }
+
+    if (user.otp.code !== otp) {
+      user.otp.attempts += 1;
+      await user.save();
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
     user.isEmailVerified = true;
-    user.otp = { code: '', expiresAt: null };
+    user.otp = {
+      code: '',
+      expiresAt: null,
+      attempts: 0,
+      lastSentAt: null,
+    };
     await user.save();
 
     res.status(200).json({ message: 'Email verified successfully' });
@@ -97,12 +111,23 @@ export const resendOtp = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    if (user.isEmailVerified) {
+      return res.status(400).json({ message: 'Email is already verified' });
+    }
+
+    const now = new Date();
+    if (user.otp?.lastSentAt && now - new Date(user.otp.lastSentAt) < 60 * 1000) {
+      return res.status(429).json({ message: 'Please wait at least 1 minute before requesting a new OTP' });
+    }
+
     const otpCode = generateOtp();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     user.otp = {
       code: otpCode,
       expiresAt: otpExpires,
+      lastSentAt: now,
+      attempts: 0,
     };
     await user.save();
 
@@ -115,7 +140,16 @@ export const resendOtp = async (req, res) => {
   }
 };
 
-// -------- Login --------
+
+
+
+
+
+
+
+
+
+
 export const login = async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
@@ -155,75 +189,6 @@ export const login = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
-
-
-export const uploadAvatar = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ message: 'No image file uploaded' });
-    }
-
-    const user = await User.findById(userId);
-
-    // Delete old avatar from Cloudinary if exists
-    if (user.avatar?.public_id) {
-      await cloudinary.uploader.destroy(user.avatar.public_id);
-    }
-
-    user.avatar = {
-      public_id: file.public_id, // comes from multer-storage-cloudinary
-      url: file.path,            // Cloudinary secure URL
-    };
-
-    await user.save();
-
-    res.status(200).json({
-      message: 'Avatar uploaded successfully',
-      avatar: user.avatar,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-
-export const uploadCoverImage = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const file = req.file;
-
-    if (!file) {
-      return res.status(400).json({ message: 'No image file uploaded' });
-    }
-
-    const user = await User.findById(userId);
-
-    // Delete old cover image if exists
-    if (user.coverImage?.public_id) {
-      await cloudinary.uploader.destroy(user.coverImage.public_id);
-    }
-
-    user.coverImage = {
-      public_id: file.public_id,
-      url: file.path,
-    };
-
-    await user.save();
-
-    res.status(200).json({
-      message: 'Cover image uploaded successfully',
-      coverImage: user.coverImage,
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -251,7 +216,6 @@ export const updateProfile = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 
 export const sendPasswordResetLink = async (req, res) => {
@@ -314,5 +278,175 @@ export const resetPassword = async (req, res) => {
     res.status(200).json({ message: 'Password reset successful' });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+
+
+// userController.js
+export const uploadAvatar = async (req, res) => {
+  try {
+    console.log('Starting uploadAvatar');
+    console.log('File received:', req.file);
+
+    const userId = req.user._id;
+    const file = req.file;
+
+    if (!file) {
+      console.log('No file provided');
+      return res.status(400).json({ message: 'No image file uploaded' });
+    }
+
+    console.log('Fetching user:', userId);
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log('Checking for existing avatar');
+    if (user.avatar?.public_id) {
+      console.log('Destroying old avatar:', user.avatar.public_id);
+      await cloudinary.uploader.destroy(user.avatar.public_id);
+    }
+
+    console.log('Saving new avatar:', file.public_id, file.path);
+    user.avatar = {
+      public_id: file.public_id, // From multer-storage-cloudinary
+      url: file.path, // Cloudinary secure URL
+    };
+
+    await user.save();
+    console.log('Avatar saved successfully');
+
+    res.status(200).json({
+      message: 'Avatar uploaded successfully',
+      avatar: user.avatar,
+    });
+  } catch (err) {
+    console.error('Error in uploadAvatar:', err.message);
+    res.status(500).json({ message: 'Failed to upload avatar', error: err.message });
+  }
+};
+
+export const uploadCoverImage = async (req, res) => {
+  try {
+    console.log('Starting uploadCoverImage');
+    console.log('File received:', req.file);
+
+    const userId = req.user._id;
+    const file = req.file;
+
+    if (!file) {
+      console.log('No file provided');
+      return res.status(400).json({ message: 'No image file uploaded' });
+    }
+
+    console.log('Fetching user:', userId);
+    const user = await User.findById(userId);
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    console.log('Checking for existing cover image');
+    if (user.coverImage?.public_id) {
+      console.log('Destroying old cover image:', user.coverImage.public_id);
+      await cloudinary.uploader.destroy(user.coverImage.public_id);
+    }
+
+    console.log('Saving new cover image:', file.public_id, file.path);
+    user.coverImage = {
+      public_id: file.public_id,
+      url: file.path,
+    };
+
+    await user.save();
+    console.log('Cover image saved successfully');
+
+    res.status(200).json({
+      message: 'Cover image uploaded successfully',
+      coverImage: user.coverImage,
+    });
+  } catch (err) {
+    console.error('Error in uploadCoverImage:', err.message);
+    res.status(500).json({ message: 'Failed to upload cover image', error: err.message });
+  }
+};
+
+
+
+
+
+
+
+export const uploadResume = async (req, res) => {
+  try {
+    console.log('Starting uploadResume');
+    console.log('File received:', req.file);
+
+    // Check if file is provided
+    if (!req.file) {
+      console.log('No file provided');
+      return res.status(400).json({ message: 'No resume file uploaded' });
+    }
+
+    // Re-fetch full Mongoose user document (not using req.user directly)
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      console.log('User not found');
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Upload file to Cloudinary using stream
+    const streamUpload = (fileBuffer) => {
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: 'raw',
+            folder: 'resumes',
+            public_id: `resume_${user._id}_${Date.now()}`,
+            allowed_formats: ['pdf', 'doc', 'docx'],
+          },
+          (error, result) => {
+            if (result) resolve(result);
+            else reject(error);
+          }
+        );
+        streamifier.createReadStream(fileBuffer).pipe(stream);
+      });
+    };
+
+    console.log('Uploading to Cloudinary');
+    const result = await streamUpload(req.file.buffer);
+
+    // Delete previous resume if exists
+    if (user.resume?.public_id) {
+      console.log('Deleting old resume from Cloudinary:', user.resume.public_id);
+      await cloudinary.uploader.destroy(user.resume.public_id, { resource_type: 'raw' });
+    }
+
+    // Set new resume data
+    user.resume = {
+      public_id: result.public_id,
+      url: result.secure_url,
+    };
+
+    console.log('Saving user with new resume:', user.resume);
+
+    await user.save();
+
+    // Fetch again to confirm it was saved
+    const updatedUser = await User.findById(user._id);
+    console.log('Updated resume from DB:', updatedUser.resume);
+
+    res.status(200).json({
+      message: 'Resume uploaded successfully',
+      resume: updatedUser.resume,
+    });
+
+  } catch (err) {
+    console.error('Error in uploadResume:', err);
+    res.status(500).json({ message: 'Failed to upload resume', error: err.message });
   }
 };
