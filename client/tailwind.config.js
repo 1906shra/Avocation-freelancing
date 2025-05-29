@@ -12,15 +12,51 @@ export default {
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
-		  animation: {
-			scroll: 'scroll 50s linear infinite',
-		  },
-		   keyframes: {
-        scroll: {
-          "0%": { transform: "translateX(100%)" },
-          "100%": { transform: "translateX(-100%)" },
-        },
-	},
+  		animation: {
+  			aurora: 'aurora 8s ease-in-out infinite alternate',
+  			marquee: 'marquee var(--duration) infinite linear',
+  			'marquee-vertical': 'marquee-vertical var(--duration) linear infinite'
+  		},
+  		keyframes: {
+  			aurora: {
+  				'0%': {
+  					backgroundPosition: '0% 50%',
+  					transform: 'rotate(-5deg) scale(0.9)'
+  				},
+  				'25%': {
+  					backgroundPosition: '50% 100%',
+  					transform: 'rotate(5deg) scale(1.1)'
+  				},
+  				'50%': {
+  					backgroundPosition: '100% 50%',
+  					transform: 'rotate(-3deg) scale(0.95)'
+  				},
+  				'75%': {
+  					backgroundPosition: '50% 0%',
+  					transform: 'rotate(3deg) scale(1.05)'
+  				},
+  				'100%': {
+  					backgroundPosition: '0% 50%',
+  					transform: 'rotate(-5deg) scale(0.9)'
+  				}
+  			},
+  			marquee: {
+  				from: {
+  					transform: 'translateX(0)'
+  				},
+  				to: {
+  					transform: 'translateX(calc(-100% - var(--gap)))'
+  				}
+  			},
+  			'marquee-vertical': {
+  				from: {
+  					transform: 'translateY(0)'
+  				},
+  				to: {
+  					transform: 'translateY(calc(-100% - var(--gap)))'
+  				}
+  			}
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -62,33 +98,6 @@ export default {
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
   			}
-  		},
-  		keyframes: {
-  			aurora: {
-  				'0%': {
-  					backgroundPosition: '0% 50%',
-  					transform: 'rotate(-5deg) scale(0.9)'
-  				},
-  				'25%': {
-  					backgroundPosition: '50% 100%',
-  					transform: 'rotate(5deg) scale(1.1)'
-  				},
-  				'50%': {
-  					backgroundPosition: '100% 50%',
-  					transform: 'rotate(-3deg) scale(0.95)'
-  				},
-  				'75%': {
-  					backgroundPosition: '50% 0%',
-  					transform: 'rotate(3deg) scale(1.05)'
-  				},
-  				'100%': {
-  					backgroundPosition: '0% 50%',
-  					transform: 'rotate(-5deg) scale(0.9)'
-  				}
-  			}
-  		},
-  		animation: {
-  			aurora: 'aurora 8s ease-in-out infinite alternate'
   		}
   	}
   },

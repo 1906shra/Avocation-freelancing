@@ -5,11 +5,20 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/authRoute.js';
 import jobRoutes from './routes/jobroute.js';
 import proposalRoutes from './routes/jobPropsalroute.js'; // Import proposal routes
+import cors from 'cors';
 
 dotenv.config();
 const app = express();
 
 app.use(express.json()); // Handles JSON bodies
+
+app.use(cors({
+  origin: "http://localhost:5173", // your frontend URL
+  credentials: true,              // required if you're sending cookies
+}));
+
+
+
 
 // ✅ DO NOT use express-fileupload
 // app.use(fileUpload()); ❌ REMOVE THIS

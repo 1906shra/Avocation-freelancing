@@ -26,7 +26,12 @@ const sendVerificationEmail = async (email, otp) => {
 // -------- Signup --------
 export const signup = async (req, res) => {
   try {
-    const { fullName, username, email, password, role } = req.body;
+    const {  fullName,
+      username,
+      email,
+      password,
+      role
+ } = req.body;
 
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
@@ -153,25 +158,35 @@ export const resendOtp = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { emailOrUsername, password } = req.body;
+    console.log("Login attempt with:", { emailOrUsername, password });
+
+    if (!emailOrUsername || !password) {
+      console.log("Missing emailOrUsername or password");
+      return res.status(400).json({ message: 'All fields are required' });
+    }
 
     const user = await User.findOne({
       $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
     }).select('+password');
 
     if (!user) {
+      console.log("User not found for:", emailOrUsername);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log("Password mismatch for user:", user.email);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     if (!user.isEmailVerified) {
+      console.log("User email not verified:", user.email);
       return res.status(403).json({ message: 'Please verify your email first' });
     }
 
     const token = generateToken(user._id);
+    console.log("Login successful for:", user.email);
 
     res.status(200).json({
       user: {
@@ -186,9 +201,20 @@ export const login = async (req, res) => {
       token,
     });
   } catch (err) {
+    console.error("Login error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
+export const logoutUser = (req, res) => {
+    try {
+        res.cookie("token", "", { httpOnly: true, expires: new Date(0) });
+        res.status(200).json({ message: "Logged out successfully" });
+    } catch (error) {
+        res.status(500).json({ message: "Logout failed", error: error.message });
+    }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -385,20 +411,19 @@ export const uploadResume = async (req, res) => {
     console.log('Starting uploadResume');
     console.log('File received:', req.file);
 
-    // Check if file is provided
     if (!req.file) {
       console.log('No file provided');
       return res.status(400).json({ message: 'No resume file uploaded' });
     }
 
-    // Re-fetch full Mongoose user document (not using req.user directly)
-    const user = await User.findById(req.user._id);
+    const userId = req.user._id;
+    const user = await User.findById(userId);
+
     if (!user) {
       console.log('User not found');
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Upload file to Cloudinary using stream
     const streamUpload = (fileBuffer) => {
       return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -420,23 +445,20 @@ export const uploadResume = async (req, res) => {
     console.log('Uploading to Cloudinary');
     const result = await streamUpload(req.file.buffer);
 
-    // Delete previous resume if exists
     if (user.resume?.public_id) {
-      console.log('Deleting old resume from Cloudinary:', user.resume.public_id);
+      console.log('Deleting old resume:', user.resume.public_id);
       await cloudinary.uploader.destroy(user.resume.public_id, { resource_type: 'raw' });
     }
 
-    // Set new resume data
     user.resume = {
       public_id: result.public_id,
       url: result.secure_url,
     };
 
     console.log('Saving user with new resume:', user.resume);
-
     await user.save();
 
-    // Fetch again to confirm it was saved
+    // Refetch to confirm save worked
     const updatedUser = await User.findById(user._id);
     console.log('Updated resume from DB:', updatedUser.resume);
 
@@ -444,9 +466,20 @@ export const uploadResume = async (req, res) => {
       message: 'Resume uploaded successfully',
       resume: updatedUser.resume,
     });
-
   } catch (err) {
     console.error('Error in uploadResume:', err);
     res.status(500).json({ message: 'Failed to upload resume', error: err.message });
+  }
+};
+
+
+export const getCurrentUser = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select('-password -otp -resetToken -resetTokenExpires');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
